@@ -26,6 +26,13 @@ Config
 You can override the app config via `CNBDBER_CONFIG=/abs/path/to/cnbdber.config`.
 The logger path is read from `cnbdber.config` and passed directly to `CNBLogger`.
 
+See `.config-examples/` in this repo for ready-to-copy examples:
+
+- `sqlite-cnbdber.config`
+- `mysql-cnbdber.config`
+- `postgres-cnbdber.config`
+- `mongo-cnbdber.config`
+
 Usage
 
 Run a one-off command:
