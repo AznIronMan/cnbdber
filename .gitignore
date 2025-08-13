@@ -1,8 +1,78 @@
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
 .venv/
+venv/
+env/
+ENV/
+.python-version
+.venv-*/
+venv-*/
+env-*/
+.env-*/
+
+# Packaging / build
+build/
 dist/
+.eggs/
 *.egg-info/
+.wheels/
+share/python-wheels/
+pip-wheel-metadata/
+*.egg
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Linters / caches
+.mypy_cache/
+.ruff_cache/
+.pytype/
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+.history/
+
+# Env files
+.env
+.env.*
+
+# Logs (global)
+*.log
+
+# Project-specific
+cnblogger.config
+**/cnblogger.config
 .logs/
-.configs/
+.private/
 
+# OS-specific
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
 
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Misc
+*.pid
+*.seed
