@@ -41,6 +41,32 @@ Specify a config explicitly:
 cnbdber --config ./my-config.json -c "DELETE FROM logs WHERE created_at < NOW() - INTERVAL 30 DAY;"
 ```
 
+- Library usage (import in Python)
+
+Use the config loader and backend helpers to run commands programmatically.
+
+```python
+from typing import Optional
+from cnbdber import load_config, get_logger
+from cnbdber.core import create_backend, run_command
+
+cfg = load_config()  # or load_config("./my-config.json")
+logger = get_logger(cfg.logger_config_path, inline_config=cfg.logger)
+
+backend = create_backend(cfg.target, logger)
+
+# DDL/DML: returns None on success
+ddl_result: Optional[str] = run_command(backend, "CREATE TABLE IF NOT EXISTS items(id INTEGER PRIMARY KEY, name TEXT);")
+
+insert_result: Optional[str] = run_command(backend, "INSERT INTO items(name) VALUES ('alpha');")
+
+# SELECT: returns tab-separated text (with header when available)
+select_result: Optional[str] = run_command(backend, "SELECT id, name FROM items ORDER BY id;")
+print(select_result or "")
+```
+
+To target MySQL/PostgreSQL/MongoDB, set `cfg.target` via `cnbdber.config` (see examples below) or construct a dict at runtime and pass it to `create_backend`.
+
 - SQL backends (SQLite/MySQL/PostgreSQL): raw SQL is executed as-is.
 - MongoDB: a minimal SQL-to-Mongo translation is supported for simple `SELECT/INSERT/UPDATE/DELETE` with equality-only `WHERE` clauses.
 
