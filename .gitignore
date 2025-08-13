@@ -56,7 +56,7 @@ cnblogger.config
 **/cnblogger.config
 .logs/
 .private/
-.coonfigs/
+.configs/
 build/
 
 *.db
