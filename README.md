@@ -43,7 +43,21 @@ cnbdber --config ./my-config.json -c "DELETE FROM logs WHERE created_at < NOW() 
 
 - Library usage (import in Python)
 
-Use the config loader and backend helpers to run commands programmatically.
+Quick one-liner function:
+
+```python
+from cnbdber import cnbdber
+
+# Use default/auto-created config
+result = cnbdber("SELECT 1;")
+print(result or "")
+
+# Or pass a custom config path
+result = cnbdber("SELECT * FROM users LIMIT 5;", "./my-config.json")
+print(result or "")
+```
+
+Or use the config loader and backend helpers for finer control:
 
 ```python
 from typing import Optional
