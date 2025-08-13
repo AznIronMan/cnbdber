@@ -56,6 +56,10 @@ cnblogger.config
 **/cnblogger.config
 .logs/
 .private/
+.coonfigs/
+build/
+
+*.db
 
 # OS-specific
 # macOS
