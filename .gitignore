@@ -59,6 +59,7 @@ cnblogger.config
 .configs/
 build/
 
+cnbdber.db
 *.db
 
 # OS-specific
