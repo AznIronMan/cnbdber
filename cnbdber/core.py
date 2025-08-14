@@ -157,10 +157,18 @@ def _maybe_start_ssh_tunnel(cfg: TargetConfig, logger: Logger) -> Optional[tuple
     ssh_cfg = cfg.get("ssh")
     if not ssh_cfg or not ssh_cfg.get("enabled", False):
         return None
+    # Import and start the tunnel while suppressing noisy cryptography deprecation warnings
+    # emitted by Paramiko/sshtunnel (e.g., TripleDES). This keeps stdout/stderr clean for users
+    # without changing runtime behavior.
     try:
+        import warnings as _warnings
+        try:
+            from cryptography.utils import CryptographyDeprecationWarning as _CryptoWarn  # type: ignore
+        except Exception:
+            _CryptoWarn = None  # type: ignore[assignment]
         from sshtunnel import SSHTunnelForwarder  # type: ignore
     except Exception:
-        raise RuntimeError("SSH tunnel requested but sshtunnel is not installed. Install with `pip install sshtunnel`." )
+        raise RuntimeError("SSH tunnel requested but sshtunnel is not installed. Install with `pip install sshtunnel`.")
 
     ssh_host = str(ssh_cfg.get("host", "127.0.0.1"))
     ssh_port = int(ssh_cfg.get("port", 22))
@@ -196,8 +204,16 @@ def _maybe_start_ssh_tunnel(cfg: TargetConfig, logger: Logger) -> Optional[tuple
     elif ssh_password:
         tunnel_kwargs["ssh_password"] = ssh_password
 
-    server = SSHTunnelForwarder(**tunnel_kwargs)
-    server.start()
+    # Suppress cryptography deprecation warnings during tunnel start as well
+    if '_warnings' in locals():
+        with _warnings.catch_warnings():  # type: ignore[name-defined]
+            if '_CryptoWarn' in locals() and _CryptoWarn is not None:  # type: ignore[name-defined]
+                _warnings.filterwarnings("ignore", category=_CryptoWarn)  # type: ignore[name-defined]
+            server = SSHTunnelForwarder(**tunnel_kwargs)
+            server.start()
+    else:
+        server = SSHTunnelForwarder(**tunnel_kwargs)
+        server.start()
     bound_host, bound_port = server.local_bind_host, server.local_bind_port
     logger.info(f"SSH tunnel established {bound_host}:{bound_port} -> {remote_host}:{remote_port}")
     return bound_host, bound_port, server

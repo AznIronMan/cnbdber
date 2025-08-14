@@ -13,6 +13,10 @@ pip install 'cnbdber[postgres]'
 pip install 'cnbdber[mongo]'
 pip install 'cnbdber[ssh]'  # for SSH tunnel support
 ```
+Notes on SSH dependencies:
+
+- The SSH tunnel feature relies on `sshtunnel` and `paramiko`. Some environments may emit Cryptography deprecation warnings (e.g., TripleDES). As of 0.3.1 these are suppressed internally so CLI and library output stays clean.
+- If you pin dependencies yourself, ensure `paramiko<3` when using `sshtunnel`.
 - From source (development):
 ```bash
 pip install -e .
@@ -157,6 +161,7 @@ SSH tunnel (optional) for MySQL/PostgreSQL:
 Notes:
 - When `password_file` is provided, it will be read and used instead of `password`.
 - Using SSH requires extra `cnbdber[ssh]`.
+- Warnings from `paramiko`/`cryptography` are suppressed beginning with 0.3.1. If you prefer to manage this yourself, remove the suppression and pin compatible versions instead.
 - Always prefer the context manager (`create_backend_context`) to ensure SSH tunnels (if any) are cleaned up automatically.
 
 License

@@ -2,6 +2,18 @@ from __future__ import annotations
 
 from typing import Optional
 
+# Suppress cryptography deprecation warnings that can be emitted by Paramiko/sshtunnel
+try:
+    import warnings as _warnings
+    try:
+        from cryptography.utils import CryptographyDeprecationWarning as _CryptoWarn  # type: ignore
+    except Exception:
+        _CryptoWarn = None  # type: ignore[assignment]
+    if _CryptoWarn is not None:
+        _warnings.filterwarnings("ignore", category=_CryptoWarn)
+except Exception:
+    pass
+
 from .config import AppConfig, load_config
 from .logger import get_logger
 from .core import create_backend, run_command, create_backend_context, close_backend
