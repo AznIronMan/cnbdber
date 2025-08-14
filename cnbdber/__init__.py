@@ -4,9 +4,18 @@ from typing import Optional
 
 from .config import AppConfig, load_config
 from .logger import get_logger
-from .core import create_backend, run_command
+from .core import create_backend, run_command, create_backend_context, close_backend
 
-__all__ = ["AppConfig", "load_config", "get_logger", "cnbdber"]
+__all__ = [
+    "AppConfig",
+    "load_config",
+    "get_logger",
+    "cnbdber",
+    "create_backend",
+    "run_command",
+    "create_backend_context",
+    "close_backend",
+]
 
 
 def cnbdber(command: str, config_path: Optional[str] = None) -> Optional[str]:
@@ -27,7 +36,7 @@ def cnbdber(command: str, config_path: Optional[str] = None) -> Optional[str]:
     """
     app_cfg = load_config(config_path)
     logger = get_logger(app_cfg.logger_config_path, inline_config=app_cfg.logger)
-    backend = create_backend(app_cfg.target, logger)
-    return run_command(backend, command)
+    with create_backend_context(app_cfg.target, logger) as backend:
+        return run_command(backend, command)
 
 

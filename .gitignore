@@ -58,6 +58,7 @@ cnblogger.config
 .private/
 .configs/
 build/
+pypi_push.sh
 
 cnbdber.db
 *.db

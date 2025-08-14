@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable, Optional, Protocol
+from typing import Any, Iterable, Optional, Protocol, ContextManager
 
 from .config import TargetConfig
 
@@ -43,14 +43,24 @@ class MySQLBackend:
     port: int
     user: str
     password: str
+    password_file: Optional[str]
     database: str
     logger: Logger
 
     def execute(self, command: str) -> Optional[str]:
+        import os
         import pymysql
+        import warnings
+        password: str = self.password
+        if (self.password_file or "").strip():
+            try:
+                with open(os.path.expanduser(str(self.password_file)), "r", encoding="utf-8") as f:
+                    password = f.read().strip()
+            except Exception:
+                warnings.warn("Could not read password_file; falling back to inline password")
 
         self.logger.debug(f"[mysql] {command}")
-        conn = pymysql.connect(host=self.host, port=self.port, user=self.user, password=self.password, database=self.database, autocommit=True)
+        conn = pymysql.connect(host=self.host, port=self.port, user=self.user, password=password, database=self.database, autocommit=True)
         try:
             with conn.cursor() as cur:
                 cur.execute(command)
@@ -70,15 +80,25 @@ class PostgresBackend:
     port: int
     user: str
     password: str
+    password_file: Optional[str]
     database: str
     sslmode: Optional[str]
     logger: Logger
 
     def execute(self, command: str) -> Optional[str]:
+        import os
         import psycopg2
+        import warnings
+        password: str = self.password
+        if (self.password_file or "").strip():
+            try:
+                with open(os.path.expanduser(str(self.password_file)), "r", encoding="utf-8") as f:
+                    password = f.read().strip()
+            except Exception:
+                warnings.warn("Could not read password_file; falling back to inline password")
 
         self.logger.debug(f"[postgres] {command}")
-        conn = psycopg2.connect(host=self.host, port=self.port, user=self.user, password=self.password, dbname=self.database, sslmode=self.sslmode or "disable")
+        conn = psycopg2.connect(host=self.host, port=self.port, user=self.user, password=password, dbname=self.database, sslmode=self.sslmode or "disable")
         try:
             with conn.cursor() as cur:
                 cur.execute(command)
@@ -117,24 +137,9 @@ def create_backend(cfg: TargetConfig, logger: Logger) -> Backend:
     if t == "sqlite":
         return SQLiteBackend(path=str(cfg.get("sqlite_path", "./cnbdber.db")), logger=logger)
     if t == "mysql":
-        return MySQLBackend(
-            host=str(cfg.get("host", "127.0.0.1")),
-            port=int(cfg.get("port", 3306)),
-            user=str(cfg.get("user", "root")),
-            password=str(cfg.get("password", "")),
-            database=str(cfg.get("database", "test")),
-            logger=logger,
-        )
+        return _create_mysql_backend(cfg, logger)
     if t == "postgres":
-        return PostgresBackend(
-            host=str(cfg.get("host", "127.0.0.1")),
-            port=int(cfg.get("port", 5432)),
-            user=str(cfg.get("user", "postgres")),
-            password=str(cfg.get("password", "")),
-            database=str(cfg.get("database", "postgres")),
-            sslmode=str(cfg.get("sslmode", "disable")),
-            logger=logger,
-        )
+        return _create_postgres_backend(cfg, logger)
     if t == "mongodb":
         return MongoBackend(
             uri=str(cfg.get("mongo_uri", "mongodb://localhost:27017")),
@@ -146,6 +151,100 @@ def create_backend(cfg: TargetConfig, logger: Logger) -> Backend:
 
 def run_command(backend: Backend, command: str) -> Optional[str]:
     return backend.execute(command)
+
+
+def _maybe_start_ssh_tunnel(cfg: TargetConfig, logger: Logger) -> Optional[tuple[str, int, Any]]:
+    ssh_cfg = cfg.get("ssh")
+    if not ssh_cfg or not ssh_cfg.get("enabled", False):
+        return None
+    try:
+        from sshtunnel import SSHTunnelForwarder  # type: ignore
+    except Exception:
+        raise RuntimeError("SSH tunnel requested but sshtunnel is not installed. Install with `pip install sshtunnel`." )
+
+    ssh_host = str(ssh_cfg.get("host", "127.0.0.1"))
+    ssh_port = int(ssh_cfg.get("port", 22))
+    ssh_user = str(ssh_cfg.get("user", ""))
+    ssh_password = str(ssh_cfg.get("password", ""))
+    ssh_password_file = str(ssh_cfg.get("password_file", ""))
+    pkey_path = str(ssh_cfg.get("pkey_path", ""))
+    pkey_password = str(ssh_cfg.get("pkey_password", ""))
+    local_bind_host = str(ssh_cfg.get("local_bind_host", "127.0.0.1"))
+    local_bind_port = int(ssh_cfg.get("local_bind_port", 0))
+    remote_host = str(ssh_cfg.get("remote_host", cfg.get("host", "127.0.0.1")))
+    remote_port = int(ssh_cfg.get("remote_port", cfg.get("port", 0)))
+
+    # read password_file if provided
+    if ssh_password_file.strip():
+        import os
+        try:
+            with open(os.path.expanduser(ssh_password_file), "r", encoding="utf-8") as f:
+                ssh_password = f.read().strip()
+        except Exception:
+            logger.error("Failed to read SSH password_file; falling back to inline password if any.")
+
+    tunnel_kwargs: dict[str, Any] = {
+        "ssh_address_or_host": (ssh_host, ssh_port),
+        "ssh_username": ssh_user or None,
+        "remote_bind_address": (remote_host, remote_port),
+        "local_bind_address": (local_bind_host, local_bind_port),
+    }
+    if pkey_path:
+        tunnel_kwargs["ssh_pkey"] = pkey_path
+        if pkey_password:
+            tunnel_kwargs["ssh_private_key_password"] = pkey_password
+    elif ssh_password:
+        tunnel_kwargs["ssh_password"] = ssh_password
+
+    server = SSHTunnelForwarder(**tunnel_kwargs)
+    server.start()
+    bound_host, bound_port = server.local_bind_host, server.local_bind_port
+    logger.info(f"SSH tunnel established {bound_host}:{bound_port} -> {remote_host}:{remote_port}")
+    return bound_host, bound_port, server
+
+
+def _create_mysql_backend(cfg: TargetConfig, logger: Logger) -> Backend:
+    tunnel_info = _maybe_start_ssh_tunnel(cfg, logger)
+    host = str(cfg.get("host", "127.0.0.1"))
+    port = int(cfg.get("port", 3306))
+    server = None
+    if tunnel_info is not None:
+        host, port, server = tunnel_info
+    backend = MySQLBackend(
+        host=host,
+        port=port,
+        user=str(cfg.get("user", "root")),
+        password=str(cfg.get("password", "")),
+        password_file=str(cfg.get("password_file", "")) or None,
+        database=str(cfg.get("database", "test")),
+        logger=logger,
+    )
+    if server is not None:
+        # attach server to backend for lifecycle management via attribute
+        setattr(backend, "_ssh_tunnel", server)
+    return backend
+
+
+def _create_postgres_backend(cfg: TargetConfig, logger: Logger) -> Backend:
+    tunnel_info = _maybe_start_ssh_tunnel(cfg, logger)
+    host = str(cfg.get("host", "127.0.0.1"))
+    port = int(cfg.get("port", 5432))
+    server = None
+    if tunnel_info is not None:
+        host, port, server = tunnel_info
+    backend = PostgresBackend(
+        host=host,
+        port=port,
+        user=str(cfg.get("user", "postgres")),
+        password=str(cfg.get("password", "")),
+        password_file=str(cfg.get("password_file", "")) or None,
+        database=str(cfg.get("database", "postgres")),
+        sslmode=str(cfg.get("sslmode", "disable")),
+        logger=logger,
+    )
+    if server is not None:
+        setattr(backend, "_ssh_tunnel", server)
+    return backend
 
 
 def _format_rows(rows: Iterable[Iterable[Any]], headers: Optional[list[str]] = None) -> str:
@@ -264,4 +363,33 @@ def _strip_quotes(s: str) -> Any:
     except Exception:
         return s
 
+
+
+def close_backend(backend: Backend) -> None:
+    server = getattr(backend, "_ssh_tunnel", None)
+    if server is not None:
+        try:
+            server.stop()
+        except Exception:
+            pass
+        try:
+            delattr(backend, "_ssh_tunnel")
+        except Exception:
+            pass
+
+
+class _BackendContext(ContextManager[Backend]):
+    def __init__(self, backend: Backend) -> None:
+        self._backend = backend
+
+    def __enter__(self) -> Backend:
+        return self._backend
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> Optional[bool]:
+        close_backend(self._backend)
+        return None
+
+
+def create_backend_context(cfg: TargetConfig, logger: Logger) -> ContextManager[Backend]:
+    return _BackendContext(create_backend(cfg, logger))
 

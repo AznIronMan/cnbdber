@@ -10,6 +10,21 @@ from typing import Any, Dict, Literal, Optional, TypedDict
 DEFAULT_CONFIG_PATH: str = "./.configs/cnbdber.config"
 
 
+class SshConfig(TypedDict, total=False):
+    enabled: bool
+    host: str
+    port: int
+    user: str
+    password: str
+    password_file: str
+    pkey_path: str
+    pkey_password: str
+    local_bind_host: str
+    local_bind_port: int
+    remote_host: str
+    remote_port: int
+
+
 class TargetConfig(TypedDict, total=False):
     type: Literal["sqlite", "mysql", "postgres", "mongodb"]
     # sqlite
@@ -19,9 +34,12 @@ class TargetConfig(TypedDict, total=False):
     port: int
     user: str
     password: str
+    password_file: str
     database: str
     # postgres
     sslmode: str
+    # optional SSH tunnel for MySQL/Postgres
+    ssh: SshConfig
     # mongodb
     mongo_uri: str
     mongo_database: str
